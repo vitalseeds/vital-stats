@@ -46,13 +46,13 @@ function vital_stats_yearly_sales_per_product_sql()
 	 * @param string $start_date The start date for the sales data.
 	 * @param string $end_date The end date for the sales data.
 	 */
-
 	$query = "
 		SELECT
 			order_items.order_item_id,
 			order_item_meta.meta_value AS product_id,
+			product_post.post_title AS product_name,
 			SUM(order_item_meta_qty.meta_value) AS quantity_sold,
-			SUM(order_item_meta_total.meta_value) AS total_sales
+			ROUND(SUM(order_item_meta_total.meta_value), 2) AS total_sales
 		FROM {$wpdb->prefix}woocommerce_order_items AS order_items
 		INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta
 			ON order_items.order_item_id = order_item_meta.order_item_id
@@ -62,6 +62,8 @@ function vital_stats_yearly_sales_per_product_sql()
 			ON order_items.order_item_id = order_item_meta_total.order_item_id
 		INNER JOIN {$wpdb->prefix}posts AS posts
 			ON order_items.order_id = posts.ID
+		INNER JOIN {$wpdb->prefix}posts AS product_post
+			ON order_item_meta.meta_value = product_post.ID
 		WHERE posts.post_type = 'shop_order'
 			AND posts.post_status IN ('wc-completed')
 			AND order_item_meta.meta_key = '_product_id'
@@ -97,13 +99,73 @@ if (defined('WP_CLI') && WP_CLI) {
 		}
 
 		$table = new \cli\Table();
-		$table->setHeaders(['Product ID', 'Quantity Sold', 'Total Sales']);
+		$table->setHeaders(['Product ID', 'Product Title', 'Quantity Sold', 'Total Sales']);
 
 		foreach ($product_sales as $sale) {
-			$table->addRow([$sale['product_id'], $sale['quantity_sold'], $sale['total_sales']]);
+			$table->addRow([$sale['product_id'], $sale['product_name'], $sale['quantity_sold'], $sale['total_sales']]);
 		}
 
 		$table->display();
 		WP_CLI::success('Yearly sales per product displayed.');
 	});
 }
+
+function vital_stats_dashboard_widget()
+{
+	wp_add_dashboard_widget(
+		'vital_stats_dashboard_widget',
+		'Yearly Sales Per Product',
+		'vital_stats_dashboard_widget_display',
+		null,
+		null,
+		'normal',
+		'default'
+	);
+}
+add_action('wp_dashboard_setup', 'vital_stats_dashboard_widget');
+
+function vital_stats_dashboard_widget_display()
+{
+	$product_sales = get_option('vital_stats_yearly_sales_per_product', []);
+
+	if (empty($product_sales)) {
+		echo '<p>No sales data found.</p>';
+		return;
+	}
+
+	echo '<table class="widefat">
+		<thead>
+			<tr>
+				<th>Product ID</th>
+				<th>Product Name</th>
+				<th>Quantity Sold</th>
+				<th>Total Sales</th>
+			</tr>
+		</thead>
+		<tbody>';
+
+	foreach ($product_sales as $sale) {
+		echo '<tr>
+			<td>' . esc_html($sale['product_id']) . '</td>
+			<td>' . esc_html($sale['product_name']) . '</td>
+			<td>' . esc_html($sale['quantity_sold']) . '</td>
+			<td>' . esc_html($sale['total_sales']) . '</td>
+		</tr>';
+	}
+
+	echo '</tbody></table>';
+}
+
+add_action('admin_head', function () {
+	echo '<style>
+		#vital_stats_dashboard_widget .handlediv {
+			display: block;
+		}
+		#vital_stats_dashboard_widget .inside {
+			display: none;
+		}
+		#vital_stats_dashboard_widget.closed .inside {
+			display: block;
+		}
+	</style>';
+});
