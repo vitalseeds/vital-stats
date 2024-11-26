@@ -17,7 +17,13 @@ if (! defined('ABSPATH')) {
 	exit; // Exit if accessed directly
 }
 
+if (! wp_next_scheduled('vital_stats_cron_hook')) {
+	wp_schedule_event(strtotime('midnight'), 'daily', 'vital_stats_cron_hook');
+}
 
+register_deactivation_hook(__FILE__, function () {
+	wp_clear_scheduled_hook('vital_stats_cron_hook');
+});
 
 function vital_stats_yearly_sales_per_product_sql()
 {
@@ -110,62 +116,66 @@ if (defined('WP_CLI') && WP_CLI) {
 	});
 }
 
-function vital_stats_dashboard_widget()
+// ADMIN MENU
+
+function vital_stats_admin_menu()
 {
-	wp_add_dashboard_widget(
-		'vital_stats_dashboard_widget',
-		'Yearly Sales Per Product',
-		'vital_stats_dashboard_widget_display',
-		null,
-		null,
-		'normal',
-		'default'
+	add_menu_page(
+		'Vital Stats',
+		'Vital Stats',
+		'manage_options',
+		'vital-stats',
+		'vital_stats_admin_page',
+		'dashicons-chart-bar',
+		6
 	);
 }
-add_action('wp_dashboard_setup', 'vital_stats_dashboard_widget');
+add_action('admin_menu', 'vital_stats_admin_menu');
 
-function vital_stats_dashboard_widget_display()
+// ADMIN PAGE
+
+function vital_stats_admin_page()
 {
+	if (isset($_POST['vital_stats_run'])) {
+		vital_stats_yearly_sales_per_product_sql();
+		echo '<div class="notice notice-success is-dismissible"><p>Yearly sales per product have been calculated and saved.</p></div>';
+	}
+
 	$product_sales = get_option('vital_stats_yearly_sales_per_product', []);
+
+	echo '<div class="wrap">
+		<h1>Vital Stats</h1>
+		<form method="post">
+			<input type="hidden" name="vital_stats_run" value="1">
+			' . wp_nonce_field('vital_stats_run_action', 'vital_stats_run_nonce') . '
+			<p><input type="submit" class="button button-primary" value="Run Yearly Sales Calculation"></p>
+		</form>';
 
 	if (empty($product_sales)) {
 		echo '<p>No sales data found.</p>';
-		return;
+	} else {
+		echo '<table class="widefat">
+			<thead>
+				<tr>
+					<th>Product ID</th>
+					<th>Product Name</th>
+					<th>Quantity Sold</th>
+					<th>Total Sales</th>
+				</tr>
+			</thead>
+			<tbody>';
+
+		foreach ($product_sales as $sale) {
+			echo '<tr>
+				<td>' . esc_html($sale['product_id']) . '</td>
+				<td>' . esc_html($sale['product_name']) . '</td>
+				<td>' . esc_html($sale['quantity_sold']) . '</td>
+				<td>' . esc_html($sale['total_sales']) . '</td>
+			</tr>';
+		}
+
+		echo '</tbody></table>';
 	}
 
-	echo '<table class="widefat">
-		<thead>
-			<tr>
-				<th>Product ID</th>
-				<th>Product Name</th>
-				<th>Quantity Sold</th>
-				<th>Total Sales</th>
-			</tr>
-		</thead>
-		<tbody>';
-
-	foreach ($product_sales as $sale) {
-		echo '<tr>
-			<td>' . esc_html($sale['product_id']) . '</td>
-			<td>' . esc_html($sale['product_name']) . '</td>
-			<td>' . esc_html($sale['quantity_sold']) . '</td>
-			<td>' . esc_html($sale['total_sales']) . '</td>
-		</tr>';
-	}
-
-	echo '</tbody></table>';
+	echo '</div>';
 }
-
-add_action('admin_head', function () {
-	echo '<style>
-		#vital_stats_dashboard_widget .handlediv {
-			display: block;
-		}
-		#vital_stats_dashboard_widget .inside {
-			display: none;
-		}
-		#vital_stats_dashboard_widget.closed .inside {
-			display: block;
-		}
-	</style>';
-});
