@@ -166,11 +166,26 @@ function vital_stats_admin_page()
 			<tbody>';
 
 		foreach ($product_sales as $sale) {
+			$row_class = $sale['quantity_sold'] > 1000 ? 'style="background-color: #cce5ff;"' : '';
+			$quantity_sold = $sale['quantity_sold'];
+			$color = 'white';
+
+			if ($quantity_sold > 1000) {
+				$color = '#ffcccc'; // Pastel Red
+			} elseif ($quantity_sold > 500) {
+				$color = '#ffcc99'; // Pastel Orange
+			} elseif ($quantity_sold > 250) {
+				$color = '#ffffcc'; // Pastel Yellow
+			} elseif ($quantity_sold > 125) {
+				$color = '#ccffcc'; // Pastel Light Green
+			}
+
+			$row_class = 'style="background-color: ' . $color . ';"';
 			echo '<tr>
 				<td>' . esc_html($sale['product_id']) . '</td>
 				<td>' . esc_html($sale['product_name']) . '</td>
-				<td>' . esc_html($sale['quantity_sold']) . '</td>
-				<td>' . esc_html($sale['total_sales']) . '</td>
+				<td ' . $row_class . '>' . esc_html($sale['quantity_sold']) . '</td>
+				<td>£' . esc_html($sale['total_sales']) . '</td>
 			</tr>';
 		}
 
