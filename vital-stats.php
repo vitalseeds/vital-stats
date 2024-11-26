@@ -13,6 +13,9 @@ Text Domain:  vital-stats
 Domain Path:  /languages
 */
 
+define('VITAL_STATS_START_DATE', date('Y-01-01 00:00:00'));
+define('VITAL_STATS_END_DATE', date('Y-12-31 23:59:59'));
+
 if (! defined('ABSPATH')) {
 	exit; // Exit if accessed directly
 }
@@ -28,9 +31,8 @@ register_deactivation_hook(__FILE__, function () {
 function vital_stats_yearly_sales_per_product_sql()
 {
 	global $wpdb;
-
-	$start_date = date('Y-01-01 00:00:00');
-	$end_date = date('Y-12-31 23:59:59');
+	$start_date = VITAL_STATS_START_DATE;
+	$end_date = VITAL_STATS_END_DATE;
 
 	/**
 	 * This SQL query retrieves sales data for WooCommerce products within a specified date range.
@@ -133,7 +135,6 @@ function vital_stats_admin_menu()
 add_action('admin_menu', 'vital_stats_admin_menu');
 
 // ADMIN PAGE
-
 function vital_stats_admin_page()
 {
 	if (isset($_POST['vital_stats_run'])) {
@@ -145,6 +146,8 @@ function vital_stats_admin_page()
 
 	echo '<div class="wrap">
 		<h1>Vital Stats</h1>
+		<p>Start Date: ' . esc_html(date('d/m/Y', strtotime(VITAL_STATS_START_DATE))) . '</p>
+		<p>End Date: ' . esc_html(date('d/m/Y', strtotime(VITAL_STATS_END_DATE))) . '</p>
 		<form method="post">
 			<input type="hidden" name="vital_stats_run" value="1">
 			' . wp_nonce_field('vital_stats_run_action', 'vital_stats_run_nonce') . '
@@ -154,18 +157,41 @@ function vital_stats_admin_page()
 	if (empty($product_sales)) {
 		echo '<p>No sales data found.</p>';
 	} else {
+		$sort_order = isset($_GET['sort_order']) && $_GET['sort_order'] === 'asc' ? 'desc' : 'asc';
+		$sorted_sales = $product_sales;
+
+		if (isset($_GET['sort_by'])) {
+			if ($_GET['sort_by'] === 'quantity_sold') {
+				usort($sorted_sales, function ($a, $b) use ($sort_order) {
+					if ($sort_order === 'asc') {
+						return $a['quantity_sold'] <=> $b['quantity_sold'];
+					} else {
+						return $b['quantity_sold'] <=> $a['quantity_sold'];
+					}
+				});
+			} elseif ($_GET['sort_by'] === 'total_sales') {
+				usort($sorted_sales, function ($a, $b) use ($sort_order) {
+					if ($sort_order === 'asc') {
+						return $a['total_sales'] <=> $b['total_sales'];
+					} else {
+						return $b['total_sales'] <=> $a['total_sales'];
+					}
+				});
+			}
+		}
+
 		echo '<table class="widefat">
 			<thead>
 				<tr>
 					<th>Product ID</th>
 					<th>Product Name</th>
-					<th>Quantity Sold</th>
-					<th>Total Sales</th>
+					<th><a href="?page=vital-stats&sort_by=quantity_sold&sort_order=' . $sort_order . '">Quantity Sold</a></th>
+					<th><a href="?page=vital-stats&sort_by=total_sales&sort_order=' . $sort_order . '">Total Sales</a></th>
 				</tr>
 			</thead>
 			<tbody>';
 
-		foreach ($product_sales as $sale) {
+		foreach ($sorted_sales as $sale) {
 			$row_class = $sale['quantity_sold'] > 1000 ? 'style="background-color: #cce5ff;"' : '';
 			$quantity_sold = $sale['quantity_sold'];
 			$color = 'white';
