@@ -13,8 +13,23 @@ Text Domain:  vital-stats
 Domain Path:  /languages
 */
 
-define('VITAL_STATS_START_DATE', date('Y-01-01 00:00:00'));
-define('VITAL_STATS_END_DATE', date('Y-12-31 23:59:59'));
+
+// define('VITAL_STATS_START_DATE', date('Y-m-d 00:00:00', strtotime('first day of September last year')));
+// define('VITAL_STATS_END_DATE', date('Y-m-d 23:59:59', strtotime('last day of August this year')));
+function vital_stats_get_start_date()
+{
+	$start_month = get_option('vital_stats_start_month', 9); // Default to September
+	$start_month_name = date('F', mktime(0, 0, 0, $start_month, 10));
+	return date('Y-m-d 00:00:00', strtotime("first day of $start_month_name last year"));
+	// return date('Y-m-d 00:00:00', strtotime("first day of $start_month last year"));
+}
+
+function vital_stats_get_end_date()
+{
+	$end_month = get_option('vital_stats_start_month', 9) - 1; // Default to September
+	$end_month_name = date('F', mktime(0, 0, 0, $end_month, 10));
+	return date('Y-m-d 23:59:59', strtotime("last day of $end_month_name this year"));
+}
 
 if (! defined('ABSPATH')) {
 	exit; // Exit if accessed directly
@@ -31,8 +46,8 @@ register_deactivation_hook(__FILE__, function () {
 function vital_stats_yearly_sales_per_product_sql()
 {
 	global $wpdb;
-	$start_date = VITAL_STATS_START_DATE;
-	$end_date = VITAL_STATS_END_DATE;
+	$start_date = vital_stats_get_start_date();
+	$end_date = vital_stats_get_end_date();
 
 	/**
 	 * This SQL query retrieves sales data for WooCommerce products within a specified date range.
@@ -96,6 +111,9 @@ function vital_stats_yearly_sales_per_product_sql()
 }
 add_action('vital_stats_cron_hook', 'vital_stats_yearly_sales_per_product_sql');
 
+
+// CLI COMMANDS
+
 if (defined('WP_CLI') && WP_CLI) {
 	WP_CLI::add_command('vital_stats yearly_sales_per_product_sql', function () {
 		WP_CLI::log('Starting the calculation of yearly sales per product...');
@@ -141,6 +159,65 @@ function vital_stats_admin_menu()
 }
 add_action('admin_menu', 'vital_stats_admin_menu');
 
+// SETTINGS PAGE
+function vital_stats_settings_page()
+{
+	if (isset($_POST['vital_stats_save_settings'])) {
+		check_admin_referer('vital_stats_save_settings_action', 'vital_stats_save_settings_nonce');
+
+		$start_month = intval($_POST['vital_stats_start_month']);
+
+		update_option('vital_stats_start_month', $start_month);
+
+		echo '<div class="notice notice-success is-dismissible"><p>Settings saved.</p></div>';
+	}
+
+	$start_month = get_option('vital_stats_start_month', 9); // Default to September
+
+	echo '<div class="wrap">
+		<h1>Vital Stats Settings</h1>
+		<p>Use the form below to set the start month for the sales data.</p>
+		<p>This month defines the start of the range within which the sales data will be collected and analyzed.</p>
+		<form method="post">
+			' . wp_nonce_field('vital_stats_save_settings_action', 'vital_stats_save_settings_nonce') . '
+			<table class="form-table">
+				<tr valign="top">
+					<th scope="row">Start Month</th>
+					<td>
+						<select name="vital_stats_start_month" required>
+							<option value="1" ' . selected($start_month, 1, false) . '>January</option>
+							<option value="2" ' . selected($start_month, 2, false) . '>February</option>
+							<option value="3" ' . selected($start_month, 3, false) . '>March</option>
+							<option value="4" ' . selected($start_month, 4, false) . '>April</option>
+							<option value="5" ' . selected($start_month, 5, false) . '>May</option>
+							<option value="6" ' . selected($start_month, 6, false) . '>June</option>
+							<option value="7" ' . selected($start_month, 7, false) . '>July</option>
+							<option value="8" ' . selected($start_month, 8, false) . '>August</option>
+							<option value="9" ' . selected($start_month, 9, false) . '>September</option>
+							<option value="10" ' . selected($start_month, 10, false) . '>October</option>
+							<option value="11" ' . selected($start_month, 11, false) . '>November</option>
+							<option value="12" ' . selected($start_month, 12, false) . '>December</option>
+						</select>
+					</td>
+				</tr>
+			</table>
+			<p><input type="submit" class="button button-primary" name="vital_stats_save_settings" value="Save Settings"></p>
+		</form>
+	</div>';
+}
+
+function vital_stats_admin_menu_settings()
+{
+	add_options_page(
+		'Vital Stats Settings',
+		'Vital Stats',
+		'manage_options',
+		'vital-stats-settings',
+		'vital_stats_settings_page'
+	);
+}
+add_action('admin_menu', 'vital_stats_admin_menu_settings');
+
 // ADMIN PAGE
 function vital_stats_admin_page()
 {
@@ -153,8 +230,14 @@ function vital_stats_admin_page()
 
 	echo '<div class="wrap">
 		<h1>Vital Stats</h1>
-		<p>Start Date: ' . esc_html(date('d/m/Y', strtotime(VITAL_STATS_START_DATE))) . '</p>
-		<p>End Date: ' . esc_html(date('d/m/Y', strtotime(VITAL_STATS_END_DATE))) . '</p>
+
+		<p>The sales data is updated once a day at midnight and cached for faster access, and to avoid adding burden to the database.</p>
+		<p>If you need to update the data immediately, you can run the calculation manually using the button below. It may take a few seconds.</p>
+
+		<p>Start Date: ' . esc_html(date('d/m/Y', strtotime(vital_stats_get_start_date()))) . '</p>
+		<p>End Date: ' . esc_html(date('d/m/Y', strtotime(vital_stats_get_end_date()))) . '</p>
+
+		<p><a href="options-general.php?page=vital-stats-settings">Date settings</a>.</p>
 		<form method="post">
 			<input type="hidden" name="vital_stats_run" value="1">
 			' . wp_nonce_field('vital_stats_run_action', 'vital_stats_run_nonce') . '
