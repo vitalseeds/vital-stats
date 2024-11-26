@@ -60,7 +60,11 @@ function vital_stats_yearly_sales_per_product_sql()
 			order_item_meta.meta_value AS product_id,
 			product_post.post_title AS product_name,
 			SUM(order_item_meta_qty.meta_value) AS quantity_sold,
-			ROUND(SUM(order_item_meta_total.meta_value), 2) AS total_sales
+			ROUND(SUM(CASE
+				WHEN order_item_meta_total.meta_value = 0 AND order_item_meta_woosb_price.meta_value IS NOT NULL
+				THEN order_item_meta_woosb_price.meta_value
+				ELSE order_item_meta_total.meta_value
+			END), 2) AS total_sales
 		FROM {$wpdb->prefix}woocommerce_order_items AS order_items
 		INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta
 			ON order_items.order_item_id = order_item_meta.order_item_id
@@ -68,6 +72,9 @@ function vital_stats_yearly_sales_per_product_sql()
 			ON order_items.order_item_id = order_item_meta_qty.order_item_id
 		INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta_total
 			ON order_items.order_item_id = order_item_meta_total.order_item_id
+		LEFT JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta_woosb_price
+			ON order_items.order_item_id = order_item_meta_woosb_price.order_item_id
+			AND order_item_meta_woosb_price.meta_key = '_woosb_price'
 		INNER JOIN {$wpdb->prefix}posts AS posts
 			ON order_items.order_id = posts.ID
 		INNER JOIN {$wpdb->prefix}posts AS product_post
