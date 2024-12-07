@@ -111,6 +111,24 @@ function vital_stats_yearly_sales_per_product_sql()
 }
 add_action('vital_stats_cron_hook', 'vital_stats_yearly_sales_per_product_sql');
 
+// // Add yearly sales per product information to each product
+// function vital_stats_add_yearly_sales_to_product($post_id)
+// {
+// 	if (get_post_type($post_id) !== 'product') {
+// 		return;
+// 	}
+
+// 	$product_sales = get_option('vital_stats_yearly_sales_per_product', []);
+
+// 	foreach ($product_sales as $sale) {
+// 		if ($sale['product_id'] == $post_id) {
+// 			update_post_meta($post_id, '_yearly_quantity_sold', $sale['quantity_sold']);
+// 			update_post_meta($post_id, '_yearly_total_sales', $sale['total_sales']);
+// 			break;
+// 		}
+// 	}
+// }
+// add_action('save_post', 'vital_stats_add_yearly_sales_to_product');
 
 // CLI COMMANDS
 
@@ -309,4 +327,28 @@ function vital_stats_admin_page()
 	}
 
 	echo '</div>';
+}
+
+/**
+ * Add custom sorting options (asc/desc)
+ */
+add_filter('woocommerce_get_catalog_ordering_args', 'custom_woocommerce_get_catalog_ordering_args');
+function custom_woocommerce_get_catalog_ordering_args($args)
+{
+	$orderby_value = isset($_GET['orderby']) ? wc_clean($_GET['orderby']) : apply_filters('woocommerce_default_catalog_orderby', get_option('woocommerce_default_catalog_orderby'));
+	if ('yearly_popularity' == $orderby_value) {
+		$args['orderby'] = 'meta_value_num';
+		$args['meta_key'] = 'total_sales';
+		$args['order'] = 'desc';
+		$args['meta_key'] = '';
+	}
+	return $args;
+}
+
+add_filter('woocommerce_default_catalog_orderby_options', 'custom_woocommerce_catalog_orderby');
+add_filter('woocommerce_catalog_orderby', 'custom_woocommerce_catalog_orderby');
+function custom_woocommerce_catalog_orderby($sortby)
+{
+	$sortby = array_merge(array('yearly_popularity' => 'Popularity'), $sortby);
+	return $sortby;
 }
