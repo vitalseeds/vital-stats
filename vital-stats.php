@@ -66,6 +66,11 @@ function vital_stats_yearly_sales_per_product_sql()
 	$start_date = vital_stats_get_start_date();
 	$end_date = vital_stats_get_end_date();
 
+	if (defined('WP_CLI') && WP_CLI) {
+		WP_CLI::log("Start Date: $start_date");
+		WP_CLI::log("End Date: $end_date");
+	}
+
 	/**
 	 * This SQL query retrieves sales data for WooCommerce products within a specified date range.
 	 *
