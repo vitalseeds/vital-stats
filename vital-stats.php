@@ -60,30 +60,154 @@ register_deactivation_hook(__FILE__, function () {
 });
 
 
+function vital_stats_yearly_sales_per_product_sql()
+{
+	global $wpdb;
+	$start_date = vital_stats_get_start_date();
+	$end_date = vital_stats_get_end_date();
+
+	/**
+	 * This SQL query retrieves sales data for WooCommerce products within a specified date range.
+	 *
+	 * The query selects the following fields:
+	 * - order_item_id: The ID of the order item.
+	 * - product_id: The ID of the product.
+	 * - quantity_sold: The total quantity of the product sold.
+	 * - total_sales: The total sales amount for the product.
+	 *
+	 * The query joins the following tables:
+	 * - woocommerce_order_items: Contains order item details.
+	 * - woocommerce_order_itemmeta: Contains metadata for order items.
+	 * - posts: Contains order details.
+	 *
+	 * The query filters results to include only completed orders ('wc-completed') and orders within the specified date range.
+	 * The results are grouped by product_id.
+	 *
+	 * @param string $start_date The start date for the sales data.
+	 * @param string $end_date The end date for the sales data.
+	 */
+	$query = "
+		SELECT
+			order_items.order_item_id,
+			order_item_meta.meta_value AS product_id,
+			product_post.post_title AS product_name,
+			SUM(order_item_meta_qty.meta_value) AS quantity_sold,
+			ROUND(SUM(CASE
+				WHEN order_item_meta_total.meta_value = 0 AND order_item_meta_woosb_price.meta_value IS NOT NULL
+				THEN order_item_meta_woosb_price.meta_value
+				ELSE order_item_meta_total.meta_value
+			END), 2) AS total_sales
+		FROM {$wpdb->prefix}woocommerce_order_items AS order_items
+		INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta
+			ON order_items.order_item_id = order_item_meta.order_item_id
+		INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta_qty
+			ON order_items.order_item_id = order_item_meta_qty.order_item_id
+		INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta_total
+			ON order_items.order_item_id = order_item_meta_total.order_item_id
+		LEFT JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta_woosb_price
+			ON order_items.order_item_id = order_item_meta_woosb_price.order_item_id
+			AND order_item_meta_woosb_price.meta_key = '_woosb_price'
+		INNER JOIN {$wpdb->prefix}posts AS posts
+			ON order_items.order_id = posts.ID
+		INNER JOIN {$wpdb->prefix}posts AS product_post
+			ON order_item_meta.meta_value = product_post.ID
+		WHERE posts.post_type = 'shop_order'
+			AND posts.post_status IN ('wc-completed')
+			AND order_item_meta.meta_key = '_product_id'
+			AND order_item_meta_qty.meta_key = '_qty'
+			AND order_item_meta_total.meta_key = '_line_total'
+			AND posts.post_date >= %s
+			AND posts.post_date <= %s
+		GROUP BY product_id
+		ORDER BY quantity_sold DESC
+	";
+
+	$product_sales = $wpdb->get_results($wpdb->prepare($query, $start_date, $end_date), ARRAY_A);
+
+	if ($wpdb->last_error) {
+		$error = 'Failed to calculate yearly sales meta values: ' . $wpdb->last_error;
+		error_log($error);
+		exit;
+	}
+
+	update_option('vital_stats_yearly_sales_per_product', $product_sales);
+
+	vital_stats_add_yearly_sales_to_products();
+}
+add_action('vital_stats_cron_hook', 'vital_stats_yearly_sales_per_product_sql');
+
+
 /**
- * Retrieves and calculates yearly sales data for WooCommerce products within a specified date range.
+ * Updates the yearly sales meta value for products in the WordPress database.
  *
- * This function constructs and executes an SQL query to gather sales data for WooCommerce products
- * between the start and end dates obtained from the `vital_stats_get_start_date` and `vital_stats_get_end_date` functions.
- * The sales data includes the total quantity sold and the total sales amount for each product.
+ * This function retrieves the yearly sales data for each product from the 'vital_stats_yearly_sales_per_product' option,
+ * constructs a SQL query to update the 'yearly_sales' meta value for each product, and executes the query.
  *
- * The SQL query joins the following tables:
- * - woocommerce_order_items: Contains order item details.
- * - woocommerce_order_itemmeta: Contains metadata for order items.
- * - posts: Contains order details.
- *
- * The query filters results to include only completed orders ('wc-completed') and orders within the specified date range.
- * The results are grouped by product_id and ordered by the quantity sold in descending order.
- *
- * The function logs the start and end dates when executed via WP-CLI.
- * If the query execution fails, an error message is logged.
- * The resulting sales data is stored in the 'vital_stats_yearly_sales_per_product' option.
- * Additionally, the function triggers the `vital_stats_add_yearly_sales_to_products` function to update product meta values.
+ * The SQL query uses a CASE statement to match each product ID with its corresponding total sales value and updates
+ * the 'yearly_sales' meta value in the 'wp_postmeta' table.
  *
  * @global wpdb $wpdb WordPress database abstraction object.
- *
- * @return void
- */ {
+ */
+function vital_stats_add_yearly_sales_to_products()
+{
+	$product_sales = get_option('vital_stats_yearly_sales_per_product', []);
+
+	global $wpdb;
+	$cases = array_column($product_sales, 'quantity_sold', 'product_id');
+
+	if (defined('WP_CLI') && WP_CLI) {
+		WP_CLI::log('Deleting current yearly_sales values...');
+	}
+	$wpdb->query(
+		$wpdb->prepare(
+			"DELETE FROM {$wpdb->postmeta} WHERE meta_key = %s",
+			'yearly_sales'
+		)
+	);
+
+	if (defined('WP_CLI') && WP_CLI) {
+		WP_CLI::log('Updating yearly_sales values per product...');
+	}
+
+	foreach ($cases as $post_id => $yearly_sales) {
+		$wpdb->query(
+			$wpdb->prepare(
+				"INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value)
+				VALUES (%d, 'yearly_sales', %d)",
+				$post_id,
+				$yearly_sales,
+			)
+		);
+	}
+
+
+	if ($wpdb->last_error) {
+		$error = 'Failed to update yearly sales meta values: ' . $wpdb->last_error;
+		if (defined('WP_CLI') && WP_CLI) {
+			WP_CLI::error($error);
+		} else {
+			add_action('admin_notices', function () use ($error) {
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html($error) . '</p></div>';
+			});
+		}
+		error_log($error);
+	} else {
+		$success = 'Per product \'yearly_sales\' meta values updated successfully.';
+		if (defined('WP_CLI') && WP_CLI) {
+			WP_CLI::success($success);
+		} else {
+			add_action('admin_notices', function () use ($success) {
+				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($success) . '</p></div>';
+			});
+		}
+		error_log($success);
+	}
+}
+
+// ADMIN MENU
+
+function vital_stats_admin_menu()
+{
 	add_menu_page(
 		'Vital Stats',
 		'Vital Stats',
