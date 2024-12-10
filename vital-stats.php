@@ -136,7 +136,9 @@ function vital_stats_add_yearly_sales_to_products()
 	global $wpdb;
 	$cases = array_column($product_sales, 'quantity_sold', 'product_id');
 
-	WP_CLI::log('Deleting current yearly_sales values...');
+	if (defined('WP_CLI') && WP_CLI) {
+		WP_CLI::log('Deleting current yearly_sales values...');
+	}
 	$wpdb->query(
 		$wpdb->prepare(
 			"DELETE FROM {$wpdb->postmeta} WHERE meta_key = %s",
@@ -144,7 +146,9 @@ function vital_stats_add_yearly_sales_to_products()
 		)
 	);
 
-	WP_CLI::log('Updating yearly_sales values per product...');
+	if (defined('WP_CLI') && WP_CLI) {
+		WP_CLI::log('Updating yearly_sales values per product...');
+	}
 
 	foreach ($cases as $post_id => $yearly_sales) {
 		$wpdb->query(
@@ -156,11 +160,13 @@ function vital_stats_add_yearly_sales_to_products()
 			)
 		);
 	}
-	file_put_contents('./query.sql', $query);
-	if ($wpdb->last_error) {
-		WP_CLI::error('Failed to update yearly sales meta values: ' . $wpdb->last_error);
-	} else {
-		WP_CLI::success('Per product \'yearly_sales\' meta values updated successfully.');
+
+	if (defined('WP_CLI') && WP_CLI) {
+		if ($wpdb->last_error) {
+			WP_CLI::error('Failed to update yearly sales meta values: ' . $wpdb->last_error);
+		} else {
+			WP_CLI::success('Per product \'yearly_sales\' meta values updated successfully.');
+		}
 	}
 }
 
