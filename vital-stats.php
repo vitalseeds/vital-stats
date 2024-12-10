@@ -161,11 +161,25 @@ function vital_stats_add_yearly_sales_to_products()
 		);
 	}
 
-	if (defined('WP_CLI') && WP_CLI) {
+
 		if ($wpdb->last_error) {
-			WP_CLI::error('Failed to update yearly sales meta values: ' . $wpdb->last_error);
+			$error = 'Failed to update yearly sales meta values: ' . $wpdb->last_error;
+			if (defined('WP_CLI') && WP_CLI) {
+				WP_CLI::error($error);
+			} else {
+				add_action('admin_notices', function () use ($error) {
+					echo '<div class="notice notice-error is-dismissible"><p>' . esc_html($error) . '</p></div>';
+				});
+			}
 		} else {
-			WP_CLI::success('Per product \'yearly_sales\' meta values updated successfully.');
+			$success = 'Per product \'yearly_sales\' meta values updated successfully.';
+			if (defined('WP_CLI') && WP_CLI) {
+				WP_CLI::success($success);
+			} else {
+				add_action('admin_notices', function () use ($success) {
+					echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($success) . '</p></div>';
+				});
+			}
 		}
 	}
 }
