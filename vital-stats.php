@@ -43,6 +43,7 @@ register_deactivation_hook(__FILE__, function () {
 	wp_clear_scheduled_hook('vital_stats_cron_hook');
 });
 
+
 function vital_stats_yearly_sales_per_product_sql()
 {
 	global $wpdb;
@@ -108,27 +109,56 @@ function vital_stats_yearly_sales_per_product_sql()
 	$product_sales = $wpdb->get_results($wpdb->prepare($query, $start_date, $end_date), ARRAY_A);
 
 	update_option('vital_stats_yearly_sales_per_product', $product_sales);
+
+	vital_stats_add_yearly_sales_to_products();
 }
 add_action('vital_stats_cron_hook', 'vital_stats_yearly_sales_per_product_sql');
 
-// // Add yearly sales per product information to each product
-// function vital_stats_add_yearly_sales_to_product($post_id)
-// {
-// 	if (get_post_type($post_id) !== 'product') {
-// 		return;
-// 	}
 
-// 	$product_sales = get_option('vital_stats_yearly_sales_per_product', []);
+/**
+ * Updates the yearly sales meta value for products in the WordPress database.
+ *
+ * This function retrieves the yearly sales data for each product from the 'vital_stats_yearly_sales_per_product' option,
+ * constructs a SQL query to update the 'yearly_sales' meta value for each product, and executes the query.
+ *
+ * The SQL query uses a CASE statement to match each product ID with its corresponding total sales value and updates
+ * the 'yearly_sales' meta value in the 'wp_postmeta' table.
+ *
+ * @global wpdb $wpdb WordPress database abstraction object.
+ */
+function vital_stats_add_yearly_sales_to_products()
+{
 
-// 	foreach ($product_sales as $sale) {
-// 		if ($sale['product_id'] == $post_id) {
-// 			update_post_meta($post_id, '_yearly_quantity_sold', $sale['quantity_sold']);
-// 			update_post_meta($post_id, '_yearly_total_sales', $sale['total_sales']);
-// 			break;
-// 		}
-// 	}
-// }
-// add_action('save_post', 'vital_stats_add_yearly_sales_to_product');
+	$product_sales = get_option('vital_stats_yearly_sales_per_product', []);
+
+	// $post_values = '';
+	// foreach ($product_sales as $i => $sale) {
+	// 	$post_value = "WHEN post_id = {$sale['product_id']} THEN {$sale['quantity_sold']} \n";
+	// 	$post_values .= $post_value;
+	// }
+	global $wpdb;
+	$cases = array_column($product_sales, 'quantity_sold', 'product_id');
+
+	foreach ($cases as $post_id => $yearly_sales) {
+		$wpdb->query(
+			$wpdb->prepare(
+				"INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value)
+				VALUES (%d, 'yearly_sales', %d)
+				ON DUPLICATE KEY UPDATE meta_value = %d",
+				$post_id,
+				$yearly_sales,
+				$yearly_sales
+			)
+		);
+	}
+	file_put_contents('./query.sql', $query);
+	$wpdb->query($query);
+	if ($wpdb->last_error) {
+		WP_CLI::error('Failed to update yearly sales meta values: ' . $wpdb->last_error);
+	} else {
+		WP_CLI::success('Per product \'yearly_sales\' meta values updated successfully.');
+	}
+}
 
 // CLI COMMANDS
 
@@ -338,9 +368,8 @@ function custom_woocommerce_get_catalog_ordering_args($args)
 	$orderby_value = isset($_GET['orderby']) ? wc_clean($_GET['orderby']) : apply_filters('woocommerce_default_catalog_orderby', get_option('woocommerce_default_catalog_orderby'));
 	if ('yearly_popularity' == $orderby_value) {
 		$args['orderby'] = 'meta_value_num';
-		$args['meta_key'] = 'total_sales';
+		$args['meta_key'] = 'yearly_sales';
 		$args['order'] = 'desc';
-		$args['meta_key'] = '';
 	}
 	return $args;
 }
@@ -351,4 +380,62 @@ function custom_woocommerce_catalog_orderby($sortby)
 {
 	$sortby = array_merge(array('yearly_popularity' => 'Popularity'), $sortby);
 	return $sortby;
+}
+
+
+if (defined('WP_CLI') && WP_CLI) {
+	WP_CLI::add_command('vital_stats update_yearly_sales', function ($args) {
+		list($post_id, $yearly_sales) = $args;
+
+		if (!is_numeric($post_id) || !is_numeric($yearly_sales)) {
+			WP_CLI::error('Both post_id and yearly_sales must be numeric.');
+			return;
+		}
+
+		update_post_meta($post_id, 'yearly_sales', $yearly_sales);
+
+		if (get_post_meta($post_id, 'yearly_sales', true) == $yearly_sales) {
+			WP_CLI::success("Yearly sales meta value for post ID $post_id updated to $yearly_sales.");
+		} else {
+			WP_CLI::error('Failed to update yearly sales meta value.');
+		}
+	});
+}
+if (defined('WP_CLI') && WP_CLI) {
+	WP_CLI::add_command('vital_stats get_yearly_sales', function ($args) {
+		list($post_id) = $args;
+
+		if (!is_numeric($post_id)) {
+			WP_CLI::error('post_id must be numeric.');
+			return;
+		}
+		$yearly_sales = get_post_meta($post_id, 'yearly_sales', true);
+
+		if ($yearly_sales === '') {
+			WP_CLI::warning("No yearly sales data found for post ID $post_id.");
+		} else {
+			WP_CLI::success("Yearly sales for post ID $post_id: $yearly_sales.");
+		}
+	});
+}
+
+if (defined('WP_CLI') && WP_CLI) {
+	WP_CLI::add_command('vital_stats show_yearly_sales', function () {
+		$product_sales = get_option('vital_stats_yearly_sales_per_product', []);
+
+		if (empty($product_sales)) {
+			WP_CLI::warning('No sales data found.');
+			return;
+		}
+
+		$table = new \cli\Table();
+		$table->setHeaders(['Product ID', 'Product Title', 'Quantity Sold', 'Total Sales']);
+
+		foreach ($product_sales as $sale) {
+			$table->addRow([$sale['product_id'], $sale['product_name'], $sale['quantity_sold'], $sale['total_sales']]);
+		}
+
+		$table->display();
+		WP_CLI::success('Yearly sales per product displayed.');
+	});
 }
