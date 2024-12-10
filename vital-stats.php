@@ -111,6 +111,12 @@ function vital_stats_yearly_sales_per_product_sql()
 
 	$product_sales = $wpdb->get_results($wpdb->prepare($query, $start_date, $end_date), ARRAY_A);
 
+	if ($wpdb->last_error) {
+		$error = 'Failed to calculate yearly sales meta values: ' . $wpdb->last_error;
+		error_log($error);
+		exit;
+	}
+
 	update_option('vital_stats_yearly_sales_per_product', $product_sales);
 
 	vital_stats_add_yearly_sales_to_products();
@@ -171,6 +177,7 @@ function vital_stats_add_yearly_sales_to_products()
 				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html($error) . '</p></div>';
 			});
 		}
+		error_log($error);
 	} else {
 		$success = 'Per product \'yearly_sales\' meta values updated successfully.';
 		if (defined('WP_CLI') && WP_CLI) {
@@ -180,6 +187,7 @@ function vital_stats_add_yearly_sales_to_products()
 				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($success) . '</p></div>';
 			});
 		}
+		error_log($success);
 	}
 }
 
