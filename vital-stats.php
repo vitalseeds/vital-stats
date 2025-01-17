@@ -91,48 +91,34 @@ function vital_stats_yearly_sales_per_product_sql()
 	 * @param string $start_date The start date for the sales data.
 	 * @param string $end_date The end date for the sales data.
 	 */
-	$query = "
-		SELECT
-			order_items.order_item_id,
-			order_item_meta.meta_value AS product_id,
-			product_post.post_title AS product_name,
-			SUM(order_item_meta_qty.meta_value) AS quantity_sold,
-			ROUND(SUM(CASE
-				WHEN order_item_meta_total.meta_value = 0 AND order_item_meta_woosb_price.meta_value IS NOT NULL
-				THEN order_item_meta_woosb_price.meta_value
-				ELSE order_item_meta_total.meta_value
-			END), 2) AS total_sales
-		FROM {$wpdb->prefix}woocommerce_order_items AS order_items
-		INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta
-			ON order_items.order_item_id = order_item_meta.order_item_id
-		INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta_qty
-			ON order_items.order_item_id = order_item_meta_qty.order_item_id
-		INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta_total
-			ON order_items.order_item_id = order_item_meta_total.order_item_id
-		LEFT JOIN {$wpdb->prefix}woocommerce_order_itemmeta AS order_item_meta_woosb_price
-			ON order_items.order_item_id = order_item_meta_woosb_price.order_item_id
-			AND order_item_meta_woosb_price.meta_key = '_woosb_price'
-		INNER JOIN {$wpdb->prefix}posts AS posts
-			ON order_items.order_id = posts.ID
-		INNER JOIN {$wpdb->prefix}posts AS product_post
-			ON order_item_meta.meta_value = product_post.ID
-		WHERE posts.post_type = 'shop_order'
-			AND posts.post_status IN ('wc-completed')
-			AND order_item_meta.meta_key = '_product_id'
-			AND order_item_meta_qty.meta_key = '_qty'
-			AND order_item_meta_total.meta_key = '_line_total'
-			AND posts.post_date >= %s
-			AND posts.post_date <= %s
-		GROUP BY product_id
-		ORDER BY quantity_sold DESC
-	";
+	// require_once __DIR__ . '/includes/sql.php';
+	// $query = file_get_contents(__DIR__ . '/includes/yearly_sales_per_product.sql');
+	// $query = file_get_contents(__DIR__ . '/includes/yearly_sales_per_product_inc_collections.sql');
 
-	$product_sales = $wpdb->get_results($wpdb->prepare($query, $start_date, $end_date), ARRAY_A);
+	// TODO: This query still returns collections, need to remove them
+	$query = file_get_contents(__DIR__ . '/includes/yearly_sales_per_product_wo_collections.sql');
+	// str_replace used instead of $wpdb->prepare to replace tokens simply to
+	// allow for easier reading of the SQL query in separate files.
+	$query = str_replace(['WPDBPREFIX_', 'STARTDATE', 'ENDDATE'], [$wpdb->prefix, $start_date, $end_date], $query);
 
+	// WP_CLI::log($query);
+
+	// $product_sales = $wpdb->get_results($wpdb->prepare($query, $start_date, $end_date), ARRAY_A);
+	$product_sales = $wpdb->get_results($query, ARRAY_A);
+	WP_CLI::log('Total Products Sold: ' . count($product_sales));
+
+	if (!empty($product_sale)) {
+		$product_sale = array_shift($product_sale);
+	}
 	if ($wpdb->last_error) {
 		$error = 'Failed to calculate yearly sales meta values: ' . $wpdb->last_error;
 		error_log($error);
-		exit;
+
+		if (defined('WP_CLI') && WP_CLI) {
+			WP_CLI::error($error);
+		} else {
+			exit;
+		}
 	}
 
 	update_option('vital_stats_yearly_sales_per_product', $product_sales);
