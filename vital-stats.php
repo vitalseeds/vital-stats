@@ -28,7 +28,7 @@ if (defined('WP_CLI') && WP_CLI) {
  *
  * @return string The start date in 'Y-m-d 00:00:00' format.
  */
-function vital_stats_get_start_date()
+function vital_stats_get_start_date($format = 'Y-m-d 00:00:00')
 {
 	$start_month = get_option('vital_stats_start_month', 9); // Default to September
 	$start_month_name = date('F', mktime(0, 0, 0, $start_month, 10));
@@ -36,15 +36,15 @@ function vital_stats_get_start_date()
 	$start_month_numeric = (int) $start_month;
 	$current_month_numeric = (int) date('n');
 	if ($current_month_numeric > $start_month_numeric) {
-		return date('Y-m-d 00:00:00', strtotime("first day of $start_month_name this year"));
+		return date($format, strtotime("first day of $start_month_name this year"));
 	}
-	return date('Y-m-d 00:00:00', strtotime("first day of $start_month_name last year"));
+	return date($format, strtotime("first day of $start_month_name last year"));
 }
 
-function vital_stats_get_end_date()
+function vital_stats_get_end_date($format = 'Y-m-d 23:59:59')
 {
 	// Always just run the stats until todays date
-	return date('Y-m-d 23:59:59');
+	return date($format);
 }
 
 if (! defined('ABSPATH')) {
@@ -70,7 +70,6 @@ function vital_stats_yearly_sales_per_product_sql()
 		WP_CLI::log("Start Date: $start_date");
 		WP_CLI::log("End Date: $end_date");
 	}
-
 	/**
 	 * This SQL query retrieves sales data for WooCommerce products within a specified date range.
 	 *
@@ -317,8 +316,10 @@ function vital_stats_admin_page()
 		<p>The sales data is updated once a day at midnight and cached for faster access, and to avoid adding burden to the database.</p>
 		<p>If you need to update the data immediately, you can run the calculation manually using the button below. It may take a few seconds.</p>
 
-		<p>Start Date: ' . esc_html(date('d/m/Y', strtotime(vital_stats_get_start_date()))) . '</p>
-		<p>End Date: ' . esc_html(date('d/m/Y', strtotime(vital_stats_get_end_date()))) . '</p>
+		<p><em>Note - the \'quantity sold\' value (used for product ordering) should be accurate, but  \'total sales\' value may not be. Same for <a href="https://vitalseeds.local/wp-admin/admin.php?range=custom&start_date=' . vital_stats_get_start_date('Y-m-d') . '&end_date=' . vital_stats_get_end_date('Y-m-d') . '&page=wc-reports&tab=orders&report=sales_by_product">WooCommerce product report</a>, possibly because does not account for collections sales.</em></p>
+
+		<p>Start Date: ' . esc_html(vital_stats_get_start_date('d/m/Y')) . '</p>
+		<p>End Date: ' . esc_html(vital_stats_get_end_date('d/m/Y')) . '</p>
 
 		<p><a href="options-general.php?page=vital-stats-settings">Date settings</a>.</p>
 		<form method="post">
