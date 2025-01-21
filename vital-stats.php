@@ -171,7 +171,6 @@ function vital_stats_add_yearly_sales_to_products()
 		);
 	}
 
-
 	if ($wpdb->last_error) {
 		$error = 'Failed to update yearly sales meta values: ' . $wpdb->last_error;
 		if (defined('WP_CLI') && WP_CLI) {
@@ -192,6 +191,36 @@ function vital_stats_add_yearly_sales_to_products()
 			});
 		}
 		error_log($success);
+	}
+
+	_set_empty_yearly_sales_meta($wpdb);
+}
+
+
+function _set_empty_yearly_sales_meta($wpdb)
+{
+	/**
+	 * Inserts a new meta key 'yearly_sales' with a default value of 0 for all published products
+	 * that do not already have yearly_sales metadata.
+	 *
+	 * This query performs the following actions:
+	 * - Selects all published products from the posts table.
+	 * - Left joins the postmeta table to check if the 'yearly_sales' meta key already exists for each product.
+	 * - Inserts a new row into the postmeta table with the 'yearly_sales' meta key and a default value of 0
+	 *   for each product that does not already have this meta key.
+	 *
+	 * @global wpdb $wpdb WordPress database abstraction object.
+	 */
+	$wpdb->query(
+		"INSERT INTO {$wpdb->postmeta} (post_id, meta_key, meta_value)
+		SELECT p.ID, 'yearly_sales', 0
+		FROM {$wpdb->posts} p
+		LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'yearly_sales'
+		WHERE p.post_type = 'product' AND pm.post_id IS NULL"
+	);
+
+	if (defined('WP_CLI') && WP_CLI) {
+		WP_CLI::log('Inserted default yearly_sales value of 0 for products without yearly sales.');
 	}
 }
 
