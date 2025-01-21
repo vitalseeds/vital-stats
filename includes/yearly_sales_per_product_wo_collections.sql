@@ -3,7 +3,7 @@ SELECT
     p.post_title AS product_name,
     SUM(oim_qty.meta_value) AS quantity_sold,
     ROUND(
-        SUM(oim_price.meta_value * oim_qty.meta_value),
+        SUM(oim_price.meta_value),
         2
     ) AS total_sales
 FROM
@@ -20,9 +20,9 @@ WHERE
     p.post_type = 'product'
     AND oim_woosb.meta_value IS NULL
     AND oim_qty.meta_key = '_qty'
-    AND oim_price.meta_key = '_line_subtotal'
+    AND oim_price.meta_key = '_line_total' -- _line_total includes discount, _line_subtotal does not
     AND o.post_type = 'shop_order'
-    AND o.post_date BETWEEN 'STARTDATE'
+    AND o.post_date BETWEEN 'STARTDATE' -- eg '2024-11-01 00:00:00'
     AND 'ENDDATE'
 GROUP BY
     p.ID,

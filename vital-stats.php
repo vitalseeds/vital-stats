@@ -105,7 +105,9 @@ function vital_stats_yearly_sales_per_product_sql()
 
 	// $product_sales = $wpdb->get_results($wpdb->prepare($query, $start_date, $end_date), ARRAY_A);
 	$product_sales = $wpdb->get_results($query, ARRAY_A);
-	WP_CLI::log('Total Products Sold: ' . count($product_sales));
+	if (defined('WP_CLI') && WP_CLI) {
+		WP_CLI::log('Total Products Sold: ' . count($product_sales));
+	}
 
 	if (!empty($product_sale)) {
 		$product_sale = array_shift($product_sale);
