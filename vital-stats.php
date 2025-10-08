@@ -417,3 +417,14 @@ function custom_woocommerce_catalog_orderby($sortby)
 	$sortby = array_merge(array('yearly_popularity' => 'Popularity'), $sortby);
 	return $sortby;
 }
+
+// Ensure yearly_sales meta exists for new products
+add_action( 'save_post_product', function( $post_id ) {
+    // Avoid autosaves, revisions, etc.
+    if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) {
+        return;
+    }
+    if ( ! metadata_exists( 'post', $post_id, 'yearly_sales' ) ) {
+        add_post_meta( $post_id, 'yearly_sales', 0, true );
+    }
+} );
