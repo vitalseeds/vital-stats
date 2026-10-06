@@ -13,6 +13,13 @@ Text Domain:  vital-stats
 Domain Path:  /languages
 */
 
+// Declare compatibility with WooCommerce High-Performance Order Storage (HPOS).
+add_action('before_woocommerce_init', function () {
+	if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
+		\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+	}
+});
+
 if (defined('WP_CLI') && WP_CLI) {
 	require_once __DIR__ . '/includes/cli.php';
 }
@@ -98,7 +105,22 @@ function vital_stats_yearly_sales_per_product_sql()
 	$query = file_get_contents(__DIR__ . '/includes/yearly_sales_per_product_wo_collections.sql');
 	// str_replace used instead of $wpdb->prepare to replace tokens simply to
 	// allow for easier reading of the SQL query in separate files.
-	$query = str_replace(['WPDBPREFIX_', 'STARTDATE', 'ENDDATE'], [$wpdb->prefix, $start_date, $end_date], $query);
+	// Orders live in wc_orders under HPOS, otherwise in posts.
+	$hpos = class_exists(\Automattic\WooCommerce\Utilities\OrderUtil::class)
+		&& \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
+	$order_cols = $hpos
+		? ['wc_orders', 'id', 'type', 'date_created_gmt']
+		: ['posts', 'ID', 'post_type', 'post_date'];
+	if ($hpos) {
+		// wc_orders only stores GMT dates; the range above is in site time.
+		$start_date = get_gmt_from_date($start_date);
+		$end_date = get_gmt_from_date($end_date);
+	}
+	$query = str_replace(
+		['ORDERS_TABLE', 'ORDER_ID_COL', 'ORDER_TYPE_COL', 'ORDER_DATE_COL', 'WPDBPREFIX_', 'STARTDATE', 'ENDDATE'],
+		[$wpdb->prefix . $order_cols[0], $order_cols[1], $order_cols[2], $order_cols[3], $wpdb->prefix, $start_date, $end_date],
+		$query
+	);
 
 	// WP_CLI::log($query);
 

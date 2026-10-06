@@ -13,7 +13,7 @@ FROM
     JOIN WPDBPREFIX_posts p ON p.ID = oim_product_id.meta_value
     JOIN WPDBPREFIX_woocommerce_order_itemmeta oim_qty ON oi.order_item_id = oim_qty.order_item_id
     JOIN WPDBPREFIX_woocommerce_order_itemmeta oim_price ON oi.order_item_id = oim_price.order_item_id
-    JOIN WPDBPREFIX_posts o ON oi.order_id = o.ID
+    JOIN ORDERS_TABLE o ON oi.order_id = o.ORDER_ID_COL
     LEFT JOIN WPDBPREFIX_woocommerce_order_itemmeta oim_woosb ON oi.order_item_id = oim_woosb.order_item_id
     AND oim_woosb.meta_key = 'woosb_ids'
 WHERE
@@ -21,8 +21,8 @@ WHERE
     AND oim_woosb.meta_value IS NULL
     AND oim_qty.meta_key = '_qty'
     AND oim_price.meta_key = '_line_total' -- _line_total includes discount, _line_subtotal does not
-    AND o.post_type = 'shop_order'
-    AND o.post_date BETWEEN 'STARTDATE' -- eg '2024-11-01 00:00:00'
+    AND o.ORDER_TYPE_COL = 'shop_order'
+    AND o.ORDER_DATE_COL BETWEEN 'STARTDATE' -- eg '2024-11-01 00:00:00'
     AND 'ENDDATE'
 GROUP BY
     p.ID,
