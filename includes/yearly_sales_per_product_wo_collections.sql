@@ -22,6 +22,7 @@ WHERE
     AND oim_qty.meta_key = '_qty'
     AND oim_price.meta_key = '_line_total' -- _line_total includes discount, _line_subtotal does not
     AND o.ORDER_TYPE_COL = 'shop_order'
+    AND o.ORDER_STATUS_COL = 'wc-completed'
     AND o.ORDER_DATE_COL BETWEEN 'STARTDATE' -- eg '2024-11-01 00:00:00'
     AND 'ENDDATE'
 GROUP BY

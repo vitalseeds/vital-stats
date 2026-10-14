@@ -97,28 +97,28 @@ function vital_stats_yearly_sales_per_product_sql()
 	 * @param string $start_date The start date for the sales data.
 	 * @param string $end_date The end date for the sales data.
 	 */
-	// require_once __DIR__ . '/includes/sql.php';
-	// $query = file_get_contents(__DIR__ . '/includes/yearly_sales_per_product.sql');
-	// $query = file_get_contents(__DIR__ . '/includes/yearly_sales_per_product_inc_collections.sql');
-
+	// This is raw SQL rather than wc_get_orders(): hydrating every order of a
+	// year as a WC_Order is far slower than one aggregate query, and this runs
+	// unattended from cron/CLI.
 	// TODO: This query still returns collections, need to remove them
 	$query = file_get_contents(__DIR__ . '/includes/yearly_sales_per_product_wo_collections.sql');
 	// str_replace used instead of $wpdb->prepare to replace tokens simply to
 	// allow for easier reading of the SQL query in separate files.
 	// Orders live in wc_orders under HPOS, otherwise in posts.
+	// TODO: drop the posts branch once HPOS is authoritative and sync is off.
 	$hpos = class_exists(\Automattic\WooCommerce\Utilities\OrderUtil::class)
 		&& \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
 	$order_cols = $hpos
-		? ['wc_orders', 'id', 'type', 'date_created_gmt']
-		: ['posts', 'ID', 'post_type', 'post_date'];
+		? ['wc_orders', 'id', 'type', 'date_created_gmt', 'status']
+		: ['posts', 'ID', 'post_type', 'post_date', 'post_status'];
 	if ($hpos) {
 		// wc_orders only stores GMT dates; the range above is in site time.
 		$start_date = get_gmt_from_date($start_date);
 		$end_date = get_gmt_from_date($end_date);
 	}
 	$query = str_replace(
-		['ORDERS_TABLE', 'ORDER_ID_COL', 'ORDER_TYPE_COL', 'ORDER_DATE_COL', 'WPDBPREFIX_', 'STARTDATE', 'ENDDATE'],
-		[$wpdb->prefix . $order_cols[0], $order_cols[1], $order_cols[2], $order_cols[3], $wpdb->prefix, $start_date, $end_date],
+		['ORDERS_TABLE', 'ORDER_ID_COL', 'ORDER_TYPE_COL', 'ORDER_DATE_COL', 'ORDER_STATUS_COL', 'WPDBPREFIX_', 'STARTDATE', 'ENDDATE'],
+		[$wpdb->prefix . $order_cols[0], $order_cols[1], $order_cols[2], $order_cols[3], $order_cols[4], $wpdb->prefix, $start_date, $end_date],
 		$query
 	);
 
